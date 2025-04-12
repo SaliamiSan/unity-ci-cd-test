@@ -1,0 +1,56 @@
+name: Unity CI/CD - Windows & Android with GitHub Releases
+
+on:
+  push:
+    tags:
+      - '*'  # запускается при любом git-теге
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        targetPlatform: [StandaloneWindows64, Android]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache Library
+        uses: actions/cache@v3
+        with:
+          path: Library
+          key: Library-${{ matrix.targetPlatform }}-${{ hashFiles('**/Assets/**', '**/Packages/**', '**/ProjectSettings/**') }}
+          restore-keys: |
+            Library-
+
+      - name: Setup Unity
+        uses: game-ci/unity-actions/setup@v2
+        with:
+          unityVersion: 6000.0.43f1
+
+      - name: Activate Unity
+        uses: game-ci/unity-actions/activate@v2
+        with:
+          unityEmail: ${{ secrets.UNITY_EMAIL }}
+          unityPassword: ${{ secrets.UNITY_PASSWORD }}
+          unityLicense: ${{ secrets.UNITY_LICENSE }}
+
+      - name: Build Project
+        uses: game-ci/unity-actions/build@v2
+        with:
+          targetPlatform: ${{ matrix.targetPlatform }}
+          outputPath: build/${{ matrix.targetPlatform }}
+
+      - name: Create ZIP Archive
+        run: |
+          sudo apt update && sudo apt install -y zip
+          cd build
+          zip -r ../${{ matrix.targetPlatform }}.zip ${{ matrix.targetPlatform }}
+
+      - name: Upload ZIP to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ matrix.targetPlatform }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
